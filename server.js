@@ -1,5 +1,6 @@
 require('dotenv').config();
-const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const axios = require('axios');
 const msal = require('@azure/msal-node');
 
@@ -27,27 +28,46 @@ async function getAccessToken() {
 }
 
 module.exports = async (req, res) => {
-  try {
-    const accessToken = await getAccessToken();
+  const url = req.url;
 
-    const reportResp = await axios.get(
-      `https://api.powerbi.com/v1.0/myorg/groups/${GROUP_ID}/reports/${REPORT_ID}`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    );
-
-    const embedResp = await axios.post(
-      `https://api.powerbi.com/v1.0/myorg/groups/${GROUP_ID}/reports/${REPORT_ID}/GenerateToken`,
-      { accessLevel: "View" },
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    );
-
-    res.status(200).json({
-      embedToken: embedResp.data.token,
-      embedUrl: reportResp.data.embedUrl,
-      reportId: REPORT_ID,
-    });
-  } catch (err) {
-    console.error(err.response?.data || err.message);
-    res.status(500).json({ error: 'Falha ao gerar embed token' });
+  // ✅ Serve o index.html na raiz
+  if (url === '/' || url === '/index.html') {
+    const filePath = path.join(__dirname, 'index.html');
+    const html = fs.readFileSync(filePath, 'utf8');
+    res.setHeader('Content-Type', 'text/html');
+    res.status(200).send(html);
+    return;
   }
+
+  // ✅ Endpoint para gerar o embed token
+  if (url.startsWith('/api/embed-token')) {
+    try {
+      const accessToken = await getAccessToken();
+
+      const reportResp = await axios.get(
+        `https://api.powerbi.com/v1.0/myorg/groups/${GROUP_ID}/reports/${REPORT_ID}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+
+      const embedResp = await axios.post(
+        `https://api.powerbi.com/v1.0/myorg/groups/${GROUP_ID}/reports/${REPORT_ID}/GenerateToken`,
+        { accessLevel: 'View' },
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+
+      res.setHeader('Content-Type', 'application/json');
+      res.status(200).json({
+        embedToken: embedResp.data.token,
+        embedUrl: reportResp.data.embedUrl,
+        reportId: REPORT_ID,
+      });
+    } catch (err) {
+      console.error(err.response?.data || err.message);
+      res.status(500).json({ error: 'Falha ao gerar embed token' });
+    }
+    return;
+  }
+
+  // ❌ Rota não encontrada
+  res.status(404).send('Rota não encontrada');
 };
