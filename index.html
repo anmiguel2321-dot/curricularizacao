@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel Power BI - Curricularização</title>
+  <style>
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      margin: 0;
+      background-color: #f4f6f8;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    header {
+      background-color: #0057b8;
+      color: white;
+      text-align: center;
+      padding: 1rem;
+      font-size: 1.4rem;
+      font-weight: bold;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 1rem;
+    }
+
+    #reportContainer {
+      width: 90%;
+      height: 80vh;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+      background-color: white;
+    }
+
+    footer {
+      background-color: #eaeaea;
+      text-align: center;
+      padding: 0.5rem;
+      font-size: 0.9rem;
+      color: #555;
+    }
+
+    @media (max-width: 768px) {
+      #reportContainer {
+        width: 100%;
+        height: 70vh;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header>📊 Painel de Curricularização - Power BI</header>
+
+  <main>
+    <div id="reportContainer"></div>
+  </main>
+
+  <footer>
+    Desenvolvido com ❤️ usando Power BI Embedded
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/powerbi-client/dist/powerbi.min.js"></script>
+<script>
+async function embedReport() {
+  try {
+    // Pega o embed token do backend
+    const res = await fetch('/api/embed-token');
+    const data = await res.json();
+
+    const alunoId = new URLSearchParams(window.location.search).get('alunoId');
+
+    const embedConfiguration = {
+      type: 'report',
+      id: data.reportId,
+      embedUrl: data.embedUrl,
+      accessToken: data.embedToken,
+      tokenType: window['powerbi-client'].models.TokenType.Embed,
+      settings: {
+        panes: {
+          filters: { visible: false },
+          pageNavigation: { visible: true }
+        },
+        background: window['powerbi-client'].models.BackgroundType.Transparent
+      }
+    };
+
+    const reportContainer = document.getElementById('reportContainer');
+    const powerbiService = new window['powerbi-client'].service.Service(
+      window['powerbi-client'].factories.hpmFactory,
+      window['powerbi-client'].factories.wpmpFactory,
+      window['powerbi-client'].factories.routerFactory
+    );
+
+    const report = powerbiService.embed(reportContainer, embedConfiguration);
+
+    // Espera relatório carregar antes de aplicar filtro
+    report.on("loaded", async function() {
+      if (alunoId) {
+        const models = window['powerbi-client'].models;
+        const filter = {
+          $schema: "http://powerbi.com/product/schema#basic",
+          target: {
+            table: "respostas",  // tabela real do dataset
+            column: "id_resposta" // coluna real do dataset
+          },
+          operator: "In",
+          values: [alunoId],
+          filterType: models.FilterType.BasicFilter
+        };
+
+        await report.updateFilters(models.FiltersOperations.Replace, [filter]);
+        console.log("Filtro aplicado via URL:", alunoId);
+      }
+    });
+
+  } catch (err) {
+    console.error("Erro ao embedar relatório:", err);
+  }
+}
+
+embedReport();
+
+fetch('/api/embed-token')
+  .then(res => res.json())
+  .then(data => console.log(data))
+  .catch(err => console.error(err));
+
+
+
+</script>
+</body>
+</html>
