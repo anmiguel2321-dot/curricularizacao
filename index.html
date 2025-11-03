@@ -72,11 +72,10 @@
 <script>
 async function embedReport() {
   try {
-    // Pega o embed token do backend
     const res = await fetch('/api/embed-token');
     const data = await res.json();
 
-    const alunoId = new URLSearchParams(window.location.search).get('alunoId');
+    const email = new URLSearchParams(window.location.search).get('email') || window.email;
 
     const embedConfiguration = {
       type: 'report',
@@ -102,23 +101,23 @@ async function embedReport() {
 
     const report = powerbiService.embed(reportContainer, embedConfiguration);
 
-    // Espera relatório carregar antes de aplicar filtro
+    // Quando o relatório carregar, aplica o filtro
     report.on("loaded", async function() {
-      if (alunoId) {
+      if (email) {
         const models = window['powerbi-client'].models;
         const filter = {
           $schema: "http://powerbi.com/product/schema#basic",
           target: {
-            table: "respostas",  // tabela real do dataset
-            column: "id_resposta" // coluna real do dataset
+            table: "respostas",   // ⚠️ Nome da tabela no dataset
+            column: "email"       // ⚠️ Nome da coluna que contém o e-mail
           },
           operator: "In",
-          values: [alunoId],
+          values: [email],
           filterType: models.FilterType.BasicFilter
         };
 
         await report.updateFilters(models.FiltersOperations.Replace, [filter]);
-        console.log("Filtro aplicado via URL:", alunoId);
+        console.log("Filtro aplicado para o e-mail:", email);
       }
     });
 
@@ -128,14 +127,7 @@ async function embedReport() {
 }
 
 embedReport();
-
-fetch('/api/embed-token')
-  .then(res => res.json())
-  .then(data => console.log(data))
-  .catch(err => console.error(err));
-
-
-
 </script>
+
 </body>
 </html>
