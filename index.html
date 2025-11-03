@@ -76,6 +76,7 @@ async function embedReport() {
     const data = await res.json();
 
     const email = new URLSearchParams(window.location.search).get('email') || window.email;
+    const id = new URLSearchParams(window.location.search).get('id') || window.id;
 
     const embedConfiguration = {
       type: 'report',
@@ -101,23 +102,34 @@ async function embedReport() {
 
     const report = powerbiService.embed(reportContainer, embedConfiguration);
 
-    // Quando o relatório carregar, aplica o filtro
+    // Aplica filtros após carregar o relatório
     report.on("loaded", async function() {
+      const models = window['powerbi-client'].models;
+      const filters = [];
+
       if (email) {
-        const models = window['powerbi-client'].models;
-        const filter = {
+        filters.push({
           $schema: "http://powerbi.com/product/schema#basic",
-          target: {
-            table: "respostas",   // ⚠️ Nome da tabela no dataset
-            column: "email"       // ⚠️ Nome da coluna que contém o e-mail
-          },
+          target: { table: "respostas", column: "e-mail" },
           operator: "In",
           values: [email],
           filterType: models.FilterType.BasicFilter
-        };
+        });
+      }
 
-        await report.updateFilters(models.FiltersOperations.Replace, [filter]);
-        console.log("Filtro aplicado para o e-mail:", email);
+      if (id) {
+        filters.push({
+          $schema: "http://powerbi.com/product/schema#basic",
+          target: { table: "respostas", column: "id_resposta" },
+          operator: "In",
+          values: [id],
+          filterType: models.FilterType.BasicFilter
+        });
+      }
+
+      if (filters.length) {
+        await report.updateFilters(models.FiltersOperations.Replace, filters);
+        console.log("Filtros aplicados:", filters);
       }
     });
 
