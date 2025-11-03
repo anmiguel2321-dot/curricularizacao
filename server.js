@@ -51,6 +51,3 @@ module.exports = async (req, res) => {
     res.status(500).json({ error: 'Falha ao gerar embed token' });
   }
 };
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor rodando em http://localhost:${PORT}`));
