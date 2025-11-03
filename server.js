@@ -1,20 +1,19 @@
+require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const msal = require('@azure/msal-node');
-const path = require('path');
-const serverless = require('serverless-http'); // npm install serverless-http
 
 const app = express();
 app.use(express.json());
+app.use(express.static(__dirname)); // serve index.html
 
-// Serve index.html para a raiz
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
+// Variáveis do .env
+const TENANT_ID = process.env.TENANT_ID;
+const CLIENT_ID = process.env.CLIENT_ID;
+const CLIENT_SECRET = process.env.CLIENT_SECRET;
+const GROUP_ID = process.env.GROUP_ID; // workspace id
+const REPORT_ID = process.env.REPORT_ID;
 
-const { TENANT_ID, CLIENT_ID, CLIENT_SECRET, GROUP_ID, REPORT_ID } = process.env;
-
-// Configuração MSAL
 const msalConfig = {
   auth: {
     clientId: CLIENT_ID,
@@ -22,9 +21,10 @@ const msalConfig = {
     clientSecret: CLIENT_SECRET,
   },
 };
+
 const cca = new msal.ConfidentialClientApplication(msalConfig);
 
-// Função para pegar access token
+// Função para pegar access token do AAD
 async function getAccessToken() {
   const tokenResponse = await cca.acquireTokenByClientCredential({
     scopes: ['https://analysis.windows.net/powerbi/api/.default'],
@@ -37,17 +37,23 @@ app.get('/api/embed-token', async (req, res) => {
   try {
     const accessToken = await getAccessToken();
 
+    // Pega info do relatório
     const reportResp = await axios.get(
       `https://api.powerbi.com/v1.0/myorg/groups/${GROUP_ID}/reports/${REPORT_ID}`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
     const report = reportResp.data;
 
+    // Gera embed token pelo endpoint correto
     const embedResp = await axios.post(
       `https://api.powerbi.com/v1.0/myorg/groups/${GROUP_ID}/reports/${REPORT_ID}/GenerateToken`,
-      { accessLevel: 'View' },
+      {
+        accessLevel: "View" // "View" ou "Edit"
+      },
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
+
+    console.log("Embed token gerado:", embedResp.data);
 
     res.json({
       embedToken: embedResp.data.token,
@@ -60,6 +66,5 @@ app.get('/api/embed-token', async (req, res) => {
   }
 });
 
-// **IMPORTANTE**: não usar app.listen no Vercel
-module.exports = app;
-module.exports.handler = serverless(app);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Servidor rodando em http://localhost:${PORT}`));
