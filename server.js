@@ -28,12 +28,23 @@ async function getAccessToken() {
 }
 
 module.exports = async (req, res) => {
-  const url = req.url;
+  const url = req.url.split('?')[0]; // ignora parâmetros da query
+  const query = new URLSearchParams(req.url.split('?')[1] || '');
+  const alunoId = query.get('alunoId'); // captura ?alunoId=101 se existir
 
-  // ✅ Serve o index.html na raiz
+  // ✅ Serve o index.html na raiz, mesmo com ?alunoId=...
   if (url === '/' || url === '/index.html') {
     const filePath = path.join(__dirname, 'index.html');
-    const html = fs.readFileSync(filePath, 'utf8');
+    let html = fs.readFileSync(filePath, 'utf8');
+
+    // (Opcional) injeta o alunoId no HTML como variável JS global
+    if (alunoId) {
+      html = html.replace(
+        '</body>',
+        `<script>window.alunoId = "${alunoId}";</script></body>`
+      );
+    }
+
     res.setHeader('Content-Type', 'text/html');
     res.status(200).send(html);
     return;
