@@ -1,4 +1,4 @@
-require('dotenv').config();
+ailrequire('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
@@ -30,7 +30,7 @@ async function getAccessToken() {
 module.exports = async (req, res) => {
   const url = req.url.split('?')[0]; // ignora parâmetros da query
   const query = new URLSearchParams(req.url.split('?')[1] || '');
-  const alunoId = query.get('alunoId'); // captura ?alunoId=101 se existir
+  const email = query.get('email'); // captura ?alunoId=101 se existir
 
   // ✅ Serve o index.html na raiz, mesmo com ?alunoId=...
   if (url === '/' || url === '/index.html') {
@@ -38,10 +38,10 @@ module.exports = async (req, res) => {
     let html = fs.readFileSync(filePath, 'utf8');
 
     // (Opcional) injeta o alunoId no HTML como variável JS global
-    if (alunoId) {
+    if (email) {
       html = html.replace(
         '</body>',
-        `<script>window.alunoId = "${alunoId}";</script></body>`
+        `<script>window.email = "${email}";</script></body>`
       );
     }
 
