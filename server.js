@@ -1,4 +1,3 @@
-require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const msal = require('@azure/msal-node');
@@ -13,12 +12,7 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Variáveis de ambiente (configure no Vercel, não no .env)
-const TENANT_ID = process.env.TENANT_ID;
-const CLIENT_ID = process.env.CLIENT_ID;
-const CLIENT_SECRET = process.env.CLIENT_SECRET;
-const GROUP_ID = process.env.GROUP_ID; // workspace id
-const REPORT_ID = process.env.REPORT_ID;
+const { TENANT_ID, CLIENT_ID, CLIENT_SECRET, GROUP_ID, REPORT_ID } = process.env;
 
 // Configuração MSAL
 const msalConfig = {
