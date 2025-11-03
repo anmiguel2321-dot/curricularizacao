@@ -28,30 +28,31 @@ async function getAccessToken() {
 }
 
 module.exports = async (req, res) => {
-  // separa rota e parâmetros (?alunoId=101)
   const [pathOnly, queryString] = req.url.split('?');
   const query = new URLSearchParams(queryString || '');
-  const alunoId = query.get('alunoId');
+  const email = query.get('email');     // captura ?email=...
+  const id = query.get('id');           // captura ?id=...
 
-  // ✅ Permite acessar / ou /index.html com parâmetros
+  // ✅ Serve index.html com parâmetros
   if (pathOnly === '/' || pathOnly === '/index.html') {
     const filePath = path.join(__dirname, 'index.html');
     let html = fs.readFileSync(filePath, 'utf8');
 
-    // injeta o alunoId no HTML, se existir
-    if (alunoId) {
-      html = html.replace(
-        '</body>',
-        `<script>window.alunoId = "${alunoId}";</script></body>`
-      );
-    }
+    // injeta os parâmetros no HTML
+    html = html.replace(
+      '</body>',
+      `<script>
+        window.email = "${email || ''}";
+        window.id = "${id || ''}";
+      </script></body>`
+    );
 
     res.setHeader('Content-Type', 'text/html');
     res.status(200).send(html);
     return;
   }
 
-  // ✅ Endpoint para gerar o embed token
+  // ✅ Endpoint para gerar embed token
   if (pathOnly.startsWith('/api/embed-token')) {
     try {
       const accessToken = await getAccessToken();
