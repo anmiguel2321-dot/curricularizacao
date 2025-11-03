@@ -1,4 +1,4 @@
-ailrequire('dotenv').config();
+require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
@@ -28,20 +28,21 @@ async function getAccessToken() {
 }
 
 module.exports = async (req, res) => {
-  const url = req.url.split('?')[0]; // ignora parâmetros da query
-  const query = new URLSearchParams(req.url.split('?')[1] || '');
-  const email = query.get('email'); // captura ?alunoId=101 se existir
+  // separa rota e parâmetros (?alunoId=101)
+  const [pathOnly, queryString] = req.url.split('?');
+  const query = new URLSearchParams(queryString || '');
+  const alunoId = query.get('alunoId');
 
-  // ✅ Serve o index.html na raiz, mesmo com ?alunoId=...
-  if (url === '/' || url === '/index.html') {
+  // ✅ Permite acessar / ou /index.html com parâmetros
+  if (pathOnly === '/' || pathOnly === '/index.html') {
     const filePath = path.join(__dirname, 'index.html');
     let html = fs.readFileSync(filePath, 'utf8');
 
-    // (Opcional) injeta o alunoId no HTML como variável JS global
-    if (email) {
+    // injeta o alunoId no HTML, se existir
+    if (alunoId) {
       html = html.replace(
         '</body>',
-        `<script>window.email = "${email}";</script></body>`
+        `<script>window.alunoId = "${alunoId}";</script></body>`
       );
     }
 
@@ -51,7 +52,7 @@ module.exports = async (req, res) => {
   }
 
   // ✅ Endpoint para gerar o embed token
-  if (url.startsWith('/api/embed-token')) {
+  if (pathOnly.startsWith('/api/embed-token')) {
     try {
       const accessToken = await getAccessToken();
 
