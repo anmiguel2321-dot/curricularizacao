@@ -1,27 +1,30 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Painel Power BI - Curricularização</title>
+
   <style>
     body {
       font-family: "Segoe UI", Arial, sans-serif;
       margin: 0;
-      background-color: #f4f6f8;
+      background-color: #f5f7fa;
       display: flex;
       flex-direction: column;
       min-height: 100vh;
+      color: #333;
     }
 
     header {
-      background-color: #0057b8;
-      color: white;
+      background: linear-gradient(90deg, #0057b8, #0073e6);
+      color: #fff;
       text-align: center;
-      padding: 1rem;
-      font-size: 1.4rem;
-      font-weight: bold;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      padding: 1rem 0.5rem;
+      font-size: 1.5rem;
+      font-weight: 600;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+      letter-spacing: 0.5px;
     }
 
     main {
@@ -29,23 +32,53 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      padding: 1rem;
+      padding: 2rem;
+      position: relative;
     }
 
     #reportContainer {
       width: 90%;
       height: 80vh;
-      border-radius: 12px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-      background-color: white;
+      border-radius: 16px;
+      background-color: #fff;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+      overflow: hidden;
+      transition: transform 0.2s ease;
+    }
+
+    #reportContainer:hover {
+      transform: scale(1.002);
     }
 
     footer {
-      background-color: #eaeaea;
+      background-color: #f0f0f0;
       text-align: center;
-      padding: 0.5rem;
+      padding: 0.7rem;
       font-size: 0.9rem;
-      color: #555;
+      color: #666;
+      box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Botão flutuante de imprimir */
+    .btn-imprimir {
+      position: absolute;
+      bottom: 2rem;
+      right: 2rem;
+      background: #0057b8;
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 60px;
+      height: 60px;
+      font-size: 1.5rem;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+
+    .btn-imprimir:hover {
+      background: #0073e6;
+      transform: scale(1.1);
     }
 
     @media (max-width: 768px) {
@@ -53,8 +86,17 @@
         width: 100%;
         height: 70vh;
       }
+
+      .btn-imprimir {
+        bottom: 1.2rem;
+        right: 1.2rem;
+        width: 50px;
+        height: 50px;
+        font-size: 1.3rem;
+      }
     }
 
+    /* Estilo de impressão */
     @media print {
       body * {
         visibility: hidden;
@@ -69,19 +111,15 @@
         width: 100%;
       }
     }
-
   </style>
 </head>
-<body>
 
+<body>
   <header>📊 Painel de Curricularização - Power BI</header>
 
-  
   <main>
     <div id="reportContainer"></div>
-    <button onclick="window.print()" class="btn-imprimir">🖨️ Imprimir relatório</button>
-
-
+    <button id="printButton" class="btn-imprimir" title="Imprimir relatório">🖨️</button>
   </main>
 
   <footer>
@@ -89,89 +127,82 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/powerbi-client/dist/powerbi.min.js"></script>
-<script>
-async function embedReport() {
-  try {
-    const res = await fetch('/api/embed-token');
-    const data = await res.json();
+  <script>
+    async function embedReport() {
+      try {
+        const res = await fetch('/api/embed-token');
+        const data = await res.json();
 
-    const email = new URLSearchParams(window.location.search).get('email') || window.email;
-    const id = new URLSearchParams(window.location.search).get('id') || window.id;
+        const email = new URLSearchParams(window.location.search).get('email') || window.email;
+        const id = new URLSearchParams(window.location.search).get('id') || window.id;
 
-    const embedConfiguration = {
-      type: 'report',
-      id: data.reportId,
-      embedUrl: data.embedUrl,
-      accessToken: data.embedToken,
-      tokenType: window['powerbi-client'].models.TokenType.Embed,
-      settings: {
-        panes: {
-          filters: { visible: false },
-          pageNavigation: { visible: true }
-        },
-        background: window['powerbi-client'].models.BackgroundType.Transparent
-      }
-    };
+        const embedConfiguration = {
+          type: 'report',
+          id: data.reportId,
+          embedUrl: data.embedUrl,
+          accessToken: data.embedToken,
+          tokenType: window['powerbi-client'].models.TokenType.Embed,
+          settings: {
+            panes: { filters: { visible: false }, pageNavigation: { visible: true } },
+            background: window['powerbi-client'].models.BackgroundType.Transparent
+          }
+        };
 
-    const reportContainer = document.getElementById('reportContainer');
-    const powerbiService = new window['powerbi-client'].service.Service(
-      window['powerbi-client'].factories.hpmFactory,
-      window['powerbi-client'].factories.wpmpFactory,
-      window['powerbi-client'].factories.routerFactory
-    );
+        const reportContainer = document.getElementById('reportContainer');
+        const powerbiService = new window['powerbi-client'].service.Service(
+          window['powerbi-client'].factories.hpmFactory,
+          window['powerbi-client'].factories.wpmpFactory,
+          window['powerbi-client'].factories.routerFactory
+        );
 
-    const report = powerbiService.embed(reportContainer, embedConfiguration);
+        const report = powerbiService.embed(reportContainer, embedConfiguration);
 
-    // Aplica filtros após carregar o relatório
-    report.on("loaded", async function() {
-      const models = window['powerbi-client'].models;
-      const filters = [];
+        report.on("loaded", async function() {
+          const models = window['powerbi-client'].models;
+          const filters = [];
 
-      if (email) {
-        filters.push({
-          $schema: "http://powerbi.com/product/schema#basic",
-          target: { table: "respostas", column: "e-mail" },
-          operator: "In",
-          values: [email],
-          filterType: models.FilterType.BasicFilter
+          if (email) {
+            filters.push({
+              $schema: "http://powerbi.com/product/schema#basic",
+              target: { table: "respostas", column: "e-mail" },
+              operator: "In",
+              values: [email],
+              filterType: models.FilterType.BasicFilter
+            });
+          }
+
+          if (id) {
+            filters.push({
+              $schema: "http://powerbi.com/product/schema#basic",
+              target: { table: "respostas", column: "id_resposta" },
+              operator: "In",
+              values: [id],
+              filterType: models.FilterType.BasicFilter
+            });
+          }
+
+          if (filters.length) {
+            await report.updateFilters(models.FiltersOperations.Replace, filters);
+            console.log("Filtros aplicados:", filters);
+          }
+
+          // Habilita botão de impressão
+          const printButton = document.getElementById('printButton');
+          printButton.addEventListener('click', async () => {
+            try {
+              await report.print();
+              console.log("Relatório enviado para impressão.");
+            } catch (err) {
+              console.error("Erro ao imprimir relatório:", err);
+            }
+          });
         });
+      } catch (err) {
+        console.error("Erro ao embedar relatório:", err);
       }
+    }
 
-      if (id) {
-        filters.push({
-          $schema: "http://powerbi.com/product/schema#basic",
-          target: { table: "respostas", column: "id_resposta" },
-          operator: "In",
-          values: [id],
-          filterType: models.FilterType.BasicFilter
-        });
-      }
-
-      if (filters.length) {
-        await report.updateFilters(models.FiltersOperations.Replace, filters);
-        console.log("Filtros aplicados:", filters);
-      }
-    });
-
-  } catch (err) {
-    console.error("Erro ao embedar relatório:", err);
-  }
-}
-
-embedReport();
-
-const printButton = document.getElementById('printButton');
-
-printButton.addEventListener('click', async () => {
-  try {
-    await report.print();
-    console.log("Relatório enviado para impressão.");
-  } catch (err) {
-    console.error("Erro ao imprimir relatório:", err);
-  }
-});
-
-</script>
-
+    embedReport();
+  </script>
 </body>
 </html>
