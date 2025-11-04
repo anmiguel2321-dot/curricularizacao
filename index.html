@@ -128,81 +128,70 @@
 
   <script src="https://cdn.jsdelivr.net/npm/powerbi-client/dist/powerbi.min.js"></script>
   <script>
-    async function embedReport() {
-      try {
-        const res = await fetch('/api/embed-token');
-        const data = await res.json();
+async function embedReport() {
+  try {
+    const res = await fetch('/api/embed-token');
+    const data = await res.json();
 
-        const email = new URLSearchParams(window.location.search).get('email') || window.email;
-        const id = new URLSearchParams(window.location.search).get('id') || window.id;
+    // Lê o código passado na URL
+    const codigo = new URLSearchParams(window.location.search).get('codigo') || window.codigo;
 
-        const embedConfiguration = {
-          type: 'report',
-          id: data.reportId,
-          embedUrl: data.embedUrl,
-          accessToken: data.embedToken,
-          tokenType: window['powerbi-client'].models.TokenType.Embed,
-          settings: {
-            panes: { filters: { visible: false }, pageNavigation: { visible: true } },
-            background: window['powerbi-client'].models.BackgroundType.Transparent
-          }
+    const embedConfiguration = {
+      type: 'report',
+      id: data.reportId,
+      embedUrl: data.embedUrl,
+      accessToken: data.embedToken,
+      tokenType: window['powerbi-client'].models.TokenType.Embed,
+      settings: {
+        panes: { filters: { visible: false }, pageNavigation: { visible: true } },
+        background: window['powerbi-client'].models.BackgroundType.Transparent
+      }
+    };
+
+    const reportContainer = document.getElementById('reportContainer');
+    const powerbiService = new window['powerbi-client'].service.Service(
+      window['powerbi-client'].factories.hpmFactory,
+      window['powerbi-client'].factories.wpmpFactory,
+      window['powerbi-client'].factories.routerFactory
+    );
+
+    const report = powerbiService.embed(reportContainer, embedConfiguration);
+
+    // Aplica o filtro quando o relatório carregar
+    report.on("loaded", async function() {
+      const models = window['powerbi-client'].models;
+
+      if (codigo) {
+        const filter = {
+          $schema: "http://powerbi.com/product/schema#basic",
+          target: { table: "respostas", column: "Codigo" },
+          operator: "In",
+          values: [codigo],
+          filterType: models.FilterType.BasicFilter
         };
 
-        const reportContainer = document.getElementById('reportContainer');
-        const powerbiService = new window['powerbi-client'].service.Service(
-          window['powerbi-client'].factories.hpmFactory,
-          window['powerbi-client'].factories.wpmpFactory,
-          window['powerbi-client'].factories.routerFactory
-        );
-
-        const report = powerbiService.embed(reportContainer, embedConfiguration);
-
-        report.on("loaded", async function() {
-          const models = window['powerbi-client'].models;
-          const filters = [];
-
-          if (email) {
-            filters.push({
-              $schema: "http://powerbi.com/product/schema#basic",
-              target: { table: "respostas", column: "e-mail" },
-              operator: "In",
-              values: [email],
-              filterType: models.FilterType.BasicFilter
-            });
-          }
-
-          if (id) {
-            filters.push({
-              $schema: "http://powerbi.com/product/schema#basic",
-              target: { table: "respostas", column: "id_resposta" },
-              operator: "In",
-              values: [id],
-              filterType: models.FilterType.BasicFilter
-            });
-          }
-
-          if (filters.length) {
-            await report.updateFilters(models.FiltersOperations.Replace, filters);
-            console.log("Filtros aplicados:", filters);
-          }
-
-          // Habilita botão de impressão
-          const printButton = document.getElementById('printButton');
-          printButton.addEventListener('click', async () => {
-            try {
-              await report.print();
-              console.log("Relatório enviado para impressão.");
-            } catch (err) {
-              console.error("Erro ao imprimir relatório:", err);
-            }
-          });
-        });
-      } catch (err) {
-        console.error("Erro ao embedar relatório:", err);
+        await report.updateFilters(models.FiltersOperations.Replace, [filter]);
+        console.log("Filtro aplicado:", filter);
       }
-    }
 
-    embedReport();
-  </script>
+      // Botão de impressão
+      const printButton = document.getElementById('printButton');
+      printButton.addEventListener('click', async () => {
+        try {
+          await report.print();
+          console.log("Relatório enviado para impressão.");
+        } catch (err) {
+          console.error("Erro ao imprimir relatório:", err);
+        }
+      });
+    });
+  } catch (err) {
+    console.error("Erro ao embedar relatório:", err);
+  }
+}
+
+embedReport();
+</script>
+
 </body>
 </html>
