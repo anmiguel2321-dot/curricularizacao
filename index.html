@@ -54,6 +54,22 @@
         height: 70vh;
       }
     }
+
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #reportContainer, #reportContainer * {
+        visibility: visible;
+      }
+      #reportContainer {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+      }
+    }
+
   </style>
 </head>
 <body>
@@ -63,7 +79,8 @@
   
   <main>
     <div id="reportContainer"></div>
-    <button id="exportPDF">Baixar PDF</button>
+    <button onclick="window.print()" class="btn-imprimir">🖨️ Imprimir relatório</button>
+
 
   </main>
 
@@ -142,6 +159,18 @@ async function embedReport() {
 }
 
 embedReport();
+
+const printButton = document.getElementById('printButton');
+
+printButton.addEventListener('click', async () => {
+  try {
+    await report.print();
+    console.log("Relatório enviado para impressão.");
+  } catch (err) {
+    console.error("Erro ao imprimir relatório:", err);
+  }
+});
+
 </script>
 
 </body>
