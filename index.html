@@ -45,19 +45,22 @@
       overflow: hidden;
     }
 
-    #status {
-      position: absolute;
-      top: 2rem;
-      font-size: 1.2rem;
-      background: #fff9c4;
-      padding: 10px 20px;
-      border-radius: 8px;
-      color: #665c00;
-      border: 1px solid #e6d267;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-      display: none;
-    }
 
+    status {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: #ffffff;
+        padding: 30px 40px;
+        border-radius: 16px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+        font-size: 1.3rem;
+        font-weight: 600;
+        text-align: center;
+        z-index: 50;
+    }
+    
     footer {
       background-color: #f0f0f0;
       text-align: center;
@@ -88,6 +91,7 @@
   <header>📊 Painel de Curricularização - Power BI</header>
 
   <main>
+    
     <div id="status">Aguarde, seu resultado fica pronto em breve...</div>
     <div id="reportContainer"></div>
     <button id="printButton" class="btn-imprimir">🖨️</button>
@@ -119,17 +123,21 @@
           id: data.reportId,
           embedUrl: data.embedUrl,
           accessToken: data.embedToken,
+          
+          settings: {
+            panes: {
+              filters: {
+                visible: false // ← desativa painel de filtros
+              }
+            }
+          },
+        
           tokenType: models.TokenType.Embed
         };
-
-        const reportContainer = document.getElementById("reportContainer");
-        const report = powerbiService.embed(reportContainer, embedConfig);
-
-        const statusEl = document.getElementById("status");
-
+        
         report.on("loaded", async () => {
-          statusEl.style.display = "block"; // aparece até decidir se há dados ou não
-
+          statusEl.style.display = "block";
+        
           if (codigo) {
             const filtro = {
               $schema: "http://powerbi.com/product/schema#basic",
@@ -138,12 +146,14 @@
               values: [codigo],
               filterType: models.FilterType.BasicFilter
             };
-            await report.removeFilters();
-            await report.updateFilters(models.FiltersOperations.Replace, [filter]);
-
-            console.log("Filtro aplicado:", filter);
+        
+            // NÃO REMOVER FILTROS → ISSO QUEBRAVA O POWER BI
+            await report.updateFilters(models.FiltersOperations.Replace, [filtro]);
+        
+            console.log("Filtro aplicado:", filtro);
           }
         });
+
 
         report.on("rendered", async () => {
           try {
