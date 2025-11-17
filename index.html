@@ -145,7 +145,7 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/powerbi-client/dist/powerbi.min.js"></script>
-  <script>
+<script>
 async function verificarDados(report) {
   try {
     const pages = await report.getPages();
@@ -156,33 +156,31 @@ async function verificarDados(report) {
       if (["table", "matrix", "card"].includes(v.type)) {
         try {
           const exportado = await v.exportData(
-            window['powerbi-client'].models.ExportDataType.Summarized,
+            powerbi.models.ExportDataType.Summarized,
             200
           );
 
           if (exportado && exportado.data) {
-
-            // Quebra CSV em linhas
+            // Transformar CSV em linhas
             const linhas = exportado.data
               .split("\n")
               .map(l => l.trim())
               .filter(l => l !== "");
 
-            // Se tiver mais que 1 linha → há dados de verdade
+            // Só tem dados quando há MAIS que 1 linha
             if (linhas.length > 1) {
               return true;
             }
           }
 
         } catch (e) {
-          console.warn("Erro exportando dados de um visual:", e);
+          console.warn("Erro exportando visual:", e);
         }
       }
     }
   } catch (err) {
     console.error("Erro ao verificar dados:", err);
   }
-
   return false;
 }
 
@@ -193,24 +191,19 @@ async function embedReport() {
 
     const codigo = new URLSearchParams(window.location.search).get('codigo') || window.codigo;
 
-    const models = window["powerbi-client"].models;
-
     const embedConfiguration = {
       type: 'report',
       id: data.reportId,
       embedUrl: data.embedUrl,
       accessToken: data.embedToken,
-      tokenType: models.TokenType.Embed,
+      tokenType: powerbi.models.TokenType.Embed,
       settings: {
-        panes: {
-          filters: { visible: false },
-          pageNavigation: { visible: true }
-        },
-        background: models.BackgroundType.Transparent
+        panes: { filters: { visible: false }, pageNavigation: { visible: true } },
+        background: powerbi.models.BackgroundType.Transparent
       }
     };
 
-    const report = window.powerbi.embed(
+    const report = powerbi.embed(
       document.getElementById('reportContainer'),
       embedConfiguration
     );
@@ -225,10 +218,10 @@ async function embedReport() {
           target: { table: "respostas", column: "Codigo" },
           operator: "In",
           values: [codigo],
-          filterType: models.FilterType.BasicFilter
+          filterType: powerbi.models.FilterType.BasicFilter
         };
 
-        await report.updateFilters(models.FiltersOperations.Replace, [filter]);
+        await report.updateFilters(powerbi.models.FiltersOperations.Replace, [filter]);
       }
 
       report.on("rendered", async () => {
@@ -242,11 +235,11 @@ async function embedReport() {
       });
     });
 
-    document.getElementById("printButton").addEventListener("click", () => report.print());
+    document.getElementById("printButton")
+            .addEventListener("click", () => report.print());
 
   } catch (err) {
     console.error("Erro ao embedar relatório:", err);
-
     document.getElementById("status").innerText =
       "Não foi possível carregar seu resultado. Tente novamente.";
   }
@@ -254,6 +247,8 @@ async function embedReport() {
 
 embedReport();
 </script>
+
+
 
 
 </body>
