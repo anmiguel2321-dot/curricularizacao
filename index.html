@@ -40,18 +40,27 @@
       box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
       overflow: hidden;
     }
-    #status {
-      position: absolute;
-      top: 2rem;
-      font-size: 1.2rem;
-      background: #fff9c4;
-      padding: 10px 20px;
-      border-radius: 8px;
-      color: #665c00;
-      border: 1px solid #e6d267;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+   #status {
+      position: fixed; /* fica na frente de tudo */
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      
+      width: 320px;
+      padding: 20px 30px;
+      background-color: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+      
+      text-align: center;
+      font-size: 1.1rem;
+      color: #333333;
+      
+      border: 1px solid #ddd;
       display: none;
+      z-index: 9999; /* garante que fique sobre tudo */
     }
+
     footer {
       background-color: #f0f0f0;
       text-align: center;
