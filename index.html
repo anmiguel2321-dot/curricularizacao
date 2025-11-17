@@ -43,11 +43,6 @@
       background-color: #fff;
       box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
       overflow: hidden;
-      transition: transform 0.2s ease;
-    }
-
-    #reportContainer:hover {
-      transform: scale(1.002);
     }
 
     #status {
@@ -85,12 +80,6 @@
       font-size: 1.5rem;
       cursor: pointer;
       box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-      transition: background 0.2s ease, transform 0.2s ease;
-    }
-
-    .btn-imprimir:hover {
-      background: #0073e6;
-      transform: scale(1.1);
     }
   </style>
 </head>
@@ -111,86 +100,96 @@
   <script src="https://cdn.jsdelivr.net/npm/powerbi-client/dist/powerbi.min.js"></script>
 
   <script>
-async function embedReport() {
-  try {
-    const res = await fetch('/api/embed-token');
-    const data = await res.json();
+    async function embedReport() {
+      try {
+        const res = await fetch('/api/embed-token');
+        const data = await res.json();
 
-    const codigo = new URLSearchParams(window.location.search).get('codigo');
+        const codigo = new URLSearchParams(window.location.search).get('codigo');
 
-    const models = window['powerbi-client'].models;
-    const powerbiService = new window['powerbi-client'].service.Service(
-      window['powerbi-client'].factories.hpmFactory,
-      window['powerbi-client'].factories.wpmpFactory,
-      window['powerbi-client'].factories.routerFactory
-    );
+        const models = window['powerbi-client'].models;
+        const powerbiService = new window['powerbi-client'].service.Service(
+          window['powerbi-client'].factories.hpmFactory,
+          window['powerbi-client'].factories.wpmpFactory,
+          window['powerbi-client'].factories.routerFactory
+        );
 
-    const embedConfig = {
-      type: 'report',
-      id: data.reportId,
-      embedUrl: data.embedUrl,
-      accessToken: data.embedToken,
-      tokenType: models.TokenType.Embed
-    };
-
-    const reportContainer = document.getElementById("reportContainer");
-    const report = powerbiService.embed(reportContainer, embedConfig);
-
-    const statusEl = document.getElementById("status");
-
-    report.on("loaded", async () => {
-      statusEl.style.display = "block"; // Mostra até checar dados
-
-      if (codigo) {
-        const filtro = {
-          $schema: "http://powerbi.com/product/schema#basic",
-          target: { table: "respostas", column: "Codigo" },
-          operator: "In",
-          values: [codigo],
-          filterType: models.FilterType.BasicFilter
+        const embedConfig = {
+          type: 'report',
+          id: data.reportId,
+          embedUrl: data.embedUrl,
+          accessToken: data.embedToken,
+          tokenType: models.TokenType.Embed
         };
 
-        await report.updateFilters(models.FiltersOperations.Replace, [filtro]);
-      }
-    });
+        const reportContainer = document.getElementById("reportContainer");
+        const report = powerbiService.embed(reportContainer, embedConfig);
 
-    report.on("rendered", async () => {
-      try {
-        const pages = await report.getPages();
-        const visuals = await pages[0].getVisuals();
+        const statusEl = document.getElementById("status");
 
-        let encontrou = false;
+        report.on("loaded", async () => {
+          statusEl.style.display = "block"; // aparece até decidir se há dados ou não
 
-        for (const v of visuals) {
-          if (["table", "matrix", "card"].includes(v.type)) {
-            try {
-              const d = await v.exportData(models.ExportDataType.Summarized);
-              if (d?.data?.length > 0) {
-                encontrou = true;
-                break;
-              }
-            } catch {}
+          if (codigo) {
+            const filtro = {
+              $schema: "http://powerbi.com/product/schema#basic",
+              target: { table: "respostas", column: "Codigo" },
+              operator: "In",
+              values: [codigo],
+              filterType: models.FilterType.BasicFilter
+            };
+            await report.removeFilters();
+            await report.updateFilters(models.FiltersOperations.Replace, [filter]);
+
+            console.log("Filtro aplicado:", filter);
           }
-        }
+        });
 
-        if (encontrou) {
-          statusEl.style.display = "none"; // Remove quando existe dado
-        } else {
-          statusEl.style.display = "block";
-          statusEl.innerText = "Aguarde, seu resultado fica pronto em breve...";
-        }
+        report.on("rendered", async () => {
+          try {
+            const pages = await report.getPages();
+            const visuals = await pages[0].getVisuals();
+
+            let encontrouDados = false;
+
+            for (const v of visuals) {
+              if (!["table", "matrix"].includes(v.type)) continue;
+
+              try {
+                const exp = await v.exportData(models.ExportDataType.Summarized);
+
+                if (exp?.data) {
+                  // CSV → separar linhas
+                  const linhas = exp.data.trim().split("\n");
+
+                  // Se tiver mais de 1 linha, existe dado
+                  if (linhas.length > 1) {
+                    encontrouDados = true;
+                    break;
+                  }
+                }
+              } catch {}
+            }
+
+            if (encontrouDados) {
+              statusEl.style.display = "none"; // esconde
+            } else {
+              statusEl.style.display = "block"; 
+              statusEl.innerText = "Aguarde, seu resultado fica pronto em breve...";
+            }
+
+          } catch (err) {
+            statusEl.style.display = "block";
+            statusEl.innerText = "Não foi possível carregar seu resultado.";
+          }
+        });
+
       } catch (err) {
-        statusEl.style.display = "block";
-        statusEl.innerText = "Não foi possível carregar seu resultado.";
+        console.error(err);
       }
-    });
+    }
 
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-embedReport();
+    embedReport();
   </script>
 </body>
 </html>
