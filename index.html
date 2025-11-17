@@ -90,124 +90,171 @@
     Desenvolvido com ❤️ usando Power BI Embedded
   </footer>
 
-  <script src="https://cdn.jsdelivr.net/npm/powerbi-client/dist/powerbi.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/powerbi-client/dist/powerbi.min.js"></script>
+<script>
+(async function() {
+  const statusEl = document.getElementById("status");
+  const reportContainer = document.getElementById("reportContainer");
+  const codigo = new URLSearchParams(window.location.search).get('codigo');
 
-  <script>
-    async function embedReport() {
+  if (!codigo) {
+    console.warn("Nenhum ?codigo= na URL");
+    return;
+  }
+
+  try {
+    // 1) get embed token / config
+    const res = await fetch('/api/embed-token');
+    const data = await res.json();
+    const models = window['powerbi-client'].models;
+
+    const embedConfig = {
+      type: 'report',
+      id: data.reportId,
+      embedUrl: data.embedUrl,
+      accessToken: data.embedToken,
+      tokenType: models.TokenType.Embed,
+      settings: { panes: { filters: { visible: false }, pageNavigation: { visible: true } } }
+    };
+
+    // 2) embed
+    const powerbiService = new window['powerbi-client'].service.Service(
+      window['powerbi-client'].factories.hpmFactory,
+      window['powerbi-client'].factories.wpmpFactory,
+      window['powerbi-client'].factories.routerFactory
+    );
+    const report = powerbiService.embed(reportContainer, embedConfig);
+
+    // helper: apply filter using BasicFilter (ensures filterType set)
+    async function applyCodigoFilter() {
+      const filtro = new models.BasicFilter(
+        { table: "respostas", column: "Codigo" },
+        "In",
+        [codigo]
+      );
+      await report.updateFilters(models.FiltersOperations.Replace, [filtro]);
+      console.log("updateFilters() chamado com BasicFilter:", filtro);
+    }
+
+    // helper: inspect current report filters
+    async function logReportFilters() {
       try {
-        const res = await fetch('/api/embed-token');
-        const data = await res.json();
-
-        const codigo = new URLSearchParams(window.location.search).get('codigo');
-        const models = window['powerbi-client'].models;
-
-        // Configurações do embed - escondendo painel de filtros
-        const embedConfig = {
-          type: 'report',
-          id: data.reportId,
-          embedUrl: data.embedUrl,
-          accessToken: data.embedToken,
-          tokenType: models.TokenType.Embed,
-          settings: {
-            panes: {
-              filters: { visible: false },
-              pageNavigation: { visible: true }
-            }
-          }
-        };
-
-        const reportContainer = document.getElementById("reportContainer");
-
-        // Usando o service embutido (como você já tinha)
-        const powerbiService = new window['powerbi-client'].service.Service(
-          window['powerbi-client'].factories.hpmFactory,
-          window['powerbi-client'].factories.wpmpFactory,
-          window['powerbi-client'].factories.routerFactory
-        );
-
-        const report = powerbiService.embed(reportContainer, embedConfig);
-        const statusEl = document.getElementById("status");
-
-        // Ao carregar o relatório aplicamos o filtro (se houver código)
-        report.on("loaded", async () => {
-          // mostramos status enquanto verificamos se há dados
-          statusEl.style.display = "block";
-
-          if (codigo) {
-            // use a classe BasicFilter para garantir filterType corretamente
-            const filtro = new models.BasicFilter(
-              { table: "respostas", column: "Codigo" },
-              "In",
-              [codigo]
-            );
-
-            // NÃO removemos filtros globais do relatório (removeFilters pode bagunçar)
-            await report.updateFilters(models.FiltersOperations.Replace, [filtro]);
-
-            console.log("Filtro aplicado:", filtro);
-          }
-        });
-
-        // Após renderizar, verificamos em visuais exportáveis (table/matrix)
-        report.on("rendered", async () => {
-          try {
-            const pages = await report.getPages();
-            const visuals = await pages[0].getVisuals();
-
-            let encontrouDados = false;
-
-            for (const v of visuals) {
-              // somente visuais que costumam permitir export de linhas
-              if (!["table", "matrix"].includes(v.type)) continue;
-
-              try {
-                const exp = await v.exportData(models.ExportDataType.Summarized);
-
-                if (exp && exp.data) {
-                  const linhas = exp.data.trim().split("\n");
-                  if (linhas.length > 1) { // mais que cabeçalho
-                    encontrouDados = true;
-                    break;
-                  }
-                }
-              } catch (e) {
-                // ignore falha de exportação de um visual específico
-              }
-            }
-
-            if (encontrouDados) {
-              statusEl.style.display = "none";
-            } else {
-              statusEl.style.display = "block";
-              statusEl.innerText = "Aguarde, seu resultado fica pronto em breve...";
-            }
-          } catch (err) {
-            console.error("Erro ao verificar dados:", err);
-            statusEl.style.display = "block";
-            statusEl.innerText = "Não foi possível carregar seu resultado.";
-          }
-        });
-
-        // Botão imprimir - tratamento seguro
-        document.getElementById("printButton").addEventListener("click", async () => {
-          try {
-            await report.print();
-          } catch (err) {
-            console.error("Erro ao imprimir:", err);
-            alert("Não foi possível enviar para impressão.");
-          }
-        });
-
-      } catch (err) {
-        console.error("Erro no embedReport:", err);
-        const statusEl = document.getElementById("status");
-        statusEl.style.display = "block";
-        statusEl.innerText = "Não foi possível carregar seu resultado.";
+        const filters = await report.getFilters();
+        console.log("report.getFilters():", filters);
+      } catch (e) {
+        console.warn("Erro ao getFilters():", e);
       }
     }
 
-    // Inicializa
-    embedReport();
-  </script>
+    // helper: get visuals metadata and try exportData; returns object with results
+    async function inspectVisualsExport() {
+      const pages = await report.getPages();
+      console.log("Pages:", pages.map(p => ({name:p.name, displayName:p.displayName})));
+      const page = pages[0];
+      const visuals = await page.getVisuals();
+      console.log("Visuals list:", visuals.map(v=>({name:v.name, type:v.type, title:v.title, id:v.getLayout ? v.getLayout().id : v.name})));
+
+      const results = [];
+      for (const v of visuals) {
+        console.log(`--- visual: name="${v.name}" type="${v.type}" title="${v.title || ''}" ---`);
+        // Only attempt export for visuals that are likely to export rows
+        if (!["table","matrix"].includes(v.type)) {
+          console.log(`Skip export for visual type="${v.type}"`);
+          results.push({ visualName: v.name, type: v.type, exported: false, reason: "not exportable type" });
+          continue;
+        }
+
+        try {
+          // request summarized up to 500 rows
+          const exported = await v.exportData(models.ExportDataType.Summarized, 500);
+          console.log(`exportData result for visual "${v.name}":`, exported);
+          const raw = exported?.data || "";
+          const linhas = raw.trim() === "" ? [] : raw.trim().split("\n");
+          console.log(`Parsed CSV lines for "${v.name}":`, linhas.length, linhas.slice(0,5));
+          results.push({ visualName: v.name, type: v.type, exported: true, raw, linhasCount: linhas.length, sampleLines: linhas.slice(0,5) });
+        } catch (err) {
+          console.warn(`exportData failed for visual "${v.name}":`, err);
+          results.push({ visualName: v.name, type: v.type, exported: false, error: err && err.message ? err.message : err });
+        }
+      }
+      return results;
+    }
+
+    // 3) apply filter when loaded
+    report.on("loaded", async () => {
+      console.log("EVENT loaded");
+      statusEl.style.display = "block";
+      statusEl.innerText = "Aguarde, seu resultado fica pronto em breve... (inspecionando)";
+
+      await applyCodigoFilter();
+      await logReportFilters();
+    });
+
+    // 4) on rendered attempt inspection and, if empty, keep polling
+    let polling = true;
+    let attempts = 0;
+    const maxAttempts = 40; // pare após ~40 tentativas (configurável)
+    const intervalMs = 3000; // 3s entre tentativas
+
+    async function checkOnce() {
+      attempts++;
+      console.log(`\n=== checkOnce attempt #${attempts} ===`);
+      try {
+        const filterState = await report.getFilters();
+        console.log("Current report filters after update:", filterState);
+      } catch(e) { console.warn("getFilters() error:", e); }
+
+      const visualsReport = await inspectVisualsExport();
+
+      // decide if any visual has data > 1 line (header + rows) 
+      const anyData = visualsReport.some(r => r.exported && (r.linhasCount && r.linhasCount > 1));
+      console.log("anyData?", anyData);
+
+      if (anyData) {
+        console.log("Dados encontrados — escondendo mensagem.");
+        statusEl.style.display = "none";
+        polling = false;
+        return;
+      } else {
+        console.log("Nenhum dado encontrado nessa checagem.");
+        statusEl.style.display = "block";
+        statusEl.innerText = "Aguarde, seu resultado fica pronto em breve...";
+      }
+    }
+
+    // initial rendered handler triggers first check, then start polling if empty
+    report.on("rendered", async () => {
+      console.log("EVENT rendered");
+      await checkOnce();
+
+      // start polling loop if still empty
+      const pollLoop = setInterval(async () => {
+        if (!polling) { clearInterval(pollLoop); return; }
+        if (attempts >= maxAttempts) {
+          console.log("Max attempts reached — parando polling.");
+          statusEl.style.display = "block";
+          statusEl.innerText = "Aguarde, seu resultado fica pronto em breve... (sem resultado após várias tentativas)";
+          clearInterval(pollLoop);
+          return;
+        }
+        await checkOnce();
+      }, intervalMs);
+    });
+
+    // 5) simple error handler (log)
+    report.on("error", e => {
+      console.error("PowerBI embed error:", e);
+      statusEl.style.display = "block";
+      statusEl.innerText = "Erro ao carregar (ver console).";
+    });
+
+  } catch (err) {
+    console.error("Erro no embedReport:", err);
+    statusEl.style.display = "block";
+    statusEl.innerText = "Erro ao iniciar a visualização.";
+  }
+})();
+</script>
+
 </body>
 </html>
