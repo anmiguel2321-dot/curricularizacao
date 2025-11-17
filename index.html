@@ -103,7 +103,6 @@
   }
 
   try {
-    // 1) get embed token / config
     const res = await fetch('/api/embed-token');
     const data = await res.json();
     const models = window['powerbi-client'].models;
@@ -114,18 +113,22 @@
       embedUrl: data.embedUrl,
       accessToken: data.embedToken,
       tokenType: models.TokenType.Embed,
-      settings: { panes: { filters: { visible: false }, pageNavigation: { visible: true } } }
+      settings: {
+        panes: {
+          filters: { visible: false },
+          pageNavigation: { visible: true }
+        }
+      }
     };
 
-    // 2) embed
     const powerbiService = new window['powerbi-client'].service.Service(
       window['powerbi-client'].factories.hpmFactory,
       window['powerbi-client'].factories.wpmpFactory,
       window['powerbi-client'].factories.routerFactory
     );
+
     const report = powerbiService.embed(reportContainer, embedConfig);
 
-    // helper: apply filter using BasicFilter (ensures filterType set)
     async function applyCodigoFilter() {
       const filtro = new models.BasicFilter(
         { table: "respostas", column: "Codigo" },
@@ -136,7 +139,6 @@
       console.log("updateFilters() chamado com BasicFilter:", filtro);
     }
 
-    // helper: inspect current report filters
     async function logReportFilters() {
       try {
         const filters = await report.getFilters();
@@ -146,41 +148,49 @@
       }
     }
 
-    // helper: get visuals metadata and try exportData; returns object with results
     async function inspectVisualsExport() {
       const pages = await report.getPages();
-      console.log("Pages:", pages.map(p => ({name:p.name, displayName:p.displayName})));
       const page = pages[0];
       const visuals = await page.getVisuals();
-      console.log("Visuals list:", visuals.map(v=>({name:v.name, type:v.type, title:v.title, id:v.getLayout ? v.getLayout().id : v.name})));
+
+      console.log("Visuals list:", visuals.map(v => ({
+        name: v.name, type: v.type, title: v.title
+      })));
 
       const results = [];
+
       for (const v of visuals) {
-        console.log(`--- visual: name="${v.name}" type="${v.type}" title="${v.title || ''}" ---`);
-        // Only attempt export for visuals that are likely to export rows
-        if (!["table","matrix"].includes(v.type)) {
+        console.log(`--- visual: ${v.name} (type=${v.type}) ---`);
+
+        // 🔥 CORREÇÃO AQUI: incluir tableEx
+        if (!["tableEx", "matrix", "table"].includes(v.type)) {
           console.log(`Skip export for visual type="${v.type}"`);
-          results.push({ visualName: v.name, type: v.type, exported: false, reason: "not exportable type" });
+          results.push({ visualName: v.name, type: v.type, exported: false });
           continue;
         }
 
         try {
-          // request summarized up to 500 rows
           const exported = await v.exportData(models.ExportDataType.Summarized, 500);
-          console.log(`exportData result for visual "${v.name}":`, exported);
           const raw = exported?.data || "";
           const linhas = raw.trim() === "" ? [] : raw.trim().split("\n");
-          console.log(`Parsed CSV lines for "${v.name}":`, linhas.length, linhas.slice(0,5));
-          results.push({ visualName: v.name, type: v.type, exported: true, raw, linhasCount: linhas.length, sampleLines: linhas.slice(0,5) });
+
+          results.push({
+            visualName: v.name,
+            type: v.type,
+            exported: true,
+            linhasCount: linhas.length,
+            sample: linhas.slice(0, 5)
+          });
+
         } catch (err) {
           console.warn(`exportData failed for visual "${v.name}":`, err);
-          results.push({ visualName: v.name, type: v.type, exported: false, error: err && err.message ? err.message : err });
+          results.push({ visualName: v.name, type: v.type, exported: false, error: err });
         }
       }
+
       return results;
     }
 
-    // 3) apply filter when loaded
     report.on("loaded", async () => {
       console.log("EVENT loaded");
       statusEl.style.display = "block";
@@ -190,50 +200,50 @@
       await logReportFilters();
     });
 
-    // 4) on rendered attempt inspection and, if empty, keep polling
     let polling = true;
     let attempts = 0;
-    const maxAttempts = 40; // pare após ~40 tentativas (configurável)
-    const intervalMs = 3000; // 3s entre tentativas
+    const maxAttempts = 40;
+    const intervalMs = 3000;
 
     async function checkOnce() {
       attempts++;
       console.log(`\n=== checkOnce attempt #${attempts} ===`);
+
       try {
         const filterState = await report.getFilters();
-        console.log("Current report filters after update:", filterState);
-      } catch(e) { console.warn("getFilters() error:", e); }
+        console.log("Current report filters:", filterState);
+      } catch(e) {}
 
       const visualsReport = await inspectVisualsExport();
 
-      // decide if any visual has data > 1 line (header + rows) 
-      const anyData = visualsReport.some(r => r.exported && (r.linhasCount && r.linhasCount > 1));
+      const anyData = visualsReport.some(r =>
+        r.exported && r.linhasCount > 1
+      );
+
       console.log("anyData?", anyData);
 
       if (anyData) {
-        console.log("Dados encontrados — escondendo mensagem.");
         statusEl.style.display = "none";
         polling = false;
         return;
       } else {
-        console.log("Nenhum dado encontrado nessa checagem.");
         statusEl.style.display = "block";
         statusEl.innerText = "Aguarde, seu resultado fica pronto em breve...";
       }
     }
 
-    // initial rendered handler triggers first check, then start polling if empty
     report.on("rendered", async () => {
       console.log("EVENT rendered");
       await checkOnce();
 
-      // start polling loop if still empty
       const pollLoop = setInterval(async () => {
-        if (!polling) { clearInterval(pollLoop); return; }
+        if (!polling) {
+          clearInterval(pollLoop);
+          return;
+        }
         if (attempts >= maxAttempts) {
-          console.log("Max attempts reached — parando polling.");
           statusEl.style.display = "block";
-          statusEl.innerText = "Aguarde, seu resultado fica pronto em breve... (sem resultado após várias tentativas)";
+          statusEl.innerText = "Aguarde, seu resultado fica pronto em breve... (timeout)";
           clearInterval(pollLoop);
           return;
         }
@@ -241,7 +251,6 @@
       }, intervalMs);
     });
 
-    // 5) simple error handler (log)
     report.on("error", e => {
       console.error("PowerBI embed error:", e);
       statusEl.style.display = "block";
