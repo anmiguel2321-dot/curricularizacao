@@ -155,27 +155,12 @@ async function verificarDados(report) {
     for (const v of visuals) {
       if (["table", "matrix", "card"].includes(v.type)) {
         try {
-          const exportado = await v.exportData(
-            powerbi.models.ExportDataType.Summarized,
-            200
-          );
+          const exportado = await v.exportData(powerbi.models.ExportDataType.Summarized);
 
-          if (exportado && exportado.data) {
-            // Transformar CSV em linhas
-            const linhas = exportado.data
-              .split("\n")
-              .map(l => l.trim())
-              .filter(l => l !== "");
-
-            // Só tem dados quando há MAIS que 1 linha
-            if (linhas.length > 1) {
-              return true;
-            }
+          if (exportado && exportado.data && exportado.data.length > 0) {
+            return true; // TEM DADOS
           }
-
-        } catch (e) {
-          console.warn("Erro exportando visual:", e);
-        }
+        } catch (e) {}
       }
     }
   } catch (err) {
@@ -203,15 +188,15 @@ async function embedReport() {
       }
     };
 
-    const report = powerbi.embed(
-      document.getElementById('reportContainer'),
-      embedConfiguration
-    );
+    const reportContainer = document.getElementById('reportContainer');
+    const report = powerbi.embed(reportContainer, embedConfiguration);
 
     const statusEl = document.getElementById("status");
     statusEl.innerText = "Aguarde, seu resultado fica pronto em breve...";
 
     report.on("loaded", async () => {
+
+      // Aplicar filtro
       if (codigo) {
         const filter = {
           $schema: "http://powerbi.com/product/schema#basic",
@@ -224,32 +209,30 @@ async function embedReport() {
         await report.updateFilters(powerbi.models.FiltersOperations.Replace, [filter]);
       }
 
+      // Verificar se os dados apareceram após renderização
       report.on("rendered", async () => {
-        const temDados = await verificarDados(report);
+        const dadosOk = await verificarDados(report);
 
-        if (temDados) {
-          statusEl.style.display = "none";
+        if (dadosOk) {
+          statusEl.style.display = "none"; // Esconde mensagem quando tiver dados
         } else {
           statusEl.innerText = "Aguarde, seu resultado fica pronto em breve...";
         }
       });
     });
 
-    document.getElementById("printButton")
-            .addEventListener("click", () => report.print());
+    // Botão imprimir
+    const printButton = document.getElementById('printButton');
+    printButton.addEventListener('click', () => report.print());
 
   } catch (err) {
     console.error("Erro ao embedar relatório:", err);
-    document.getElementById("status").innerText =
-      "Não foi possível carregar seu resultado. Tente novamente.";
+    document.getElementById("status").innerText = "Erro ao carregar relatório.";
   }
 }
 
 embedReport();
 </script>
-
-
-
 
 </body>
 </html>
