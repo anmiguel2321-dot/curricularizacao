@@ -194,7 +194,7 @@
     report.on("loaded", async () => {
       console.log("EVENT loaded");
       statusEl.style.display = "block";
-      statusEl.innerText = "Aguarde, seu resultado fica pronto em breve... (inspecionando)";
+      statusEl.innerText = "inspecionando...";
 
       await applyCodigoFilter();
       await logReportFilters();
