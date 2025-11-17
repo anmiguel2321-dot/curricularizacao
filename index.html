@@ -118,6 +118,13 @@
   <header>📊 Painel de Curricularização - Power BI</header>
 
   <main>
+    <div id="status" style="position:absolute; top:20px; left:20px; 
+         background:#fff; padding:10px 16px; border-radius:8px;
+         box-shadow:0 4px 12px rgba(0,0,0,0.15); font-size:14px; font-weight:600;
+         z-index:10;">
+      Aguarde, seu resultado fica pronto em breve...
+    </div>
+
     <div id="reportContainer"></div>
     <button id="printButton" class="btn-imprimir" title="Imprimir relatório">🖨️</button>
   </main>
@@ -128,12 +135,34 @@
 
   <script src="https://cdn.jsdelivr.net/npm/powerbi-client/dist/powerbi.min.js"></script>
   <script>
+async function verificarDados(report) {
+  try {
+    const pages = await report.getPages();
+    const page = pages[0];
+    const visuals = await page.getVisuals();
+
+    for (const v of visuals) {
+      if (["table", "matrix", "card"].includes(v.type)) {
+        try {
+          const exportado = await v.exportData(powerbi.models.ExportDataType.Summarized);
+
+          if (exportado && exportado.data && exportado.data.length > 0) {
+            return true; // TEM DADOS
+          }
+        } catch (e) {}
+      }
+    }
+  } catch (err) {
+    console.error("Erro ao verificar dados:", err);
+  }
+  return false;
+}
+
 async function embedReport() {
   try {
     const res = await fetch('/api/embed-token');
     const data = await res.json();
 
-    // Lê o código passado na URL
     const codigo = new URLSearchParams(window.location.search).get('codigo') || window.codigo;
 
     const embedConfiguration = {
@@ -141,54 +170,53 @@ async function embedReport() {
       id: data.reportId,
       embedUrl: data.embedUrl,
       accessToken: data.embedToken,
-      tokenType: window['powerbi-client'].models.TokenType.Embed,
+      tokenType: powerbi.models.TokenType.Embed,
       settings: {
         panes: { filters: { visible: false }, pageNavigation: { visible: true } },
-        background: window['powerbi-client'].models.BackgroundType.Transparent
+        background: powerbi.models.BackgroundType.Transparent
       }
     };
 
     const reportContainer = document.getElementById('reportContainer');
-    const powerbiService = new window['powerbi-client'].service.Service(
-      window['powerbi-client'].factories.hpmFactory,
-      window['powerbi-client'].factories.wpmpFactory,
-      window['powerbi-client'].factories.routerFactory
-    );
+    const report = powerbi.embed(reportContainer, embedConfiguration);
 
-    const report = powerbiService.embed(reportContainer, embedConfiguration);
+    const statusEl = document.getElementById("status");
+    statusEl.innerText = "Aguarde, seu resultado fica pronto em breve...";
 
-    // Aplica o filtro quando o relatório carregar
-    report.on("loaded", async function() {
-      const models = window['powerbi-client'].models;
+    report.on("loaded", async () => {
 
+      // Aplicar filtro
       if (codigo) {
         const filter = {
           $schema: "http://powerbi.com/product/schema#basic",
           target: { table: "respostas", column: "Codigo" },
           operator: "In",
           values: [codigo],
-          filterType: models.FilterType.BasicFilter
+          filterType: powerbi.models.FilterType.BasicFilter
         };
 
-        await report.removeFilters();
-        await report.updateFilters(models.FiltersOperations.Replace, [filter]);
-
-        console.log("Filtro aplicado:", filter);
+        await report.updateFilters(powerbi.models.FiltersOperations.Replace, [filter]);
       }
 
-      // Botão de impressão
-      const printButton = document.getElementById('printButton');
-      printButton.addEventListener('click', async () => {
-        try {
-          await report.print();
-          console.log("Relatório enviado para impressão.");
-        } catch (err) {
-          console.error("Erro ao imprimir relatório:", err);
+      // Verificar se os dados apareceram após renderização
+      report.on("rendered", async () => {
+        const dadosOk = await verificarDados(report);
+
+        if (dadosOk) {
+          statusEl.style.display = "none"; // Esconde mensagem quando tiver dados
+        } else {
+          statusEl.innerText = "Aguarde, seu resultado fica pronto em breve...";
         }
       });
     });
+
+    // Botão imprimir
+    const printButton = document.getElementById('printButton');
+    printButton.addEventListener('click', () => report.print());
+
   } catch (err) {
     console.error("Erro ao embedar relatório:", err);
+    document.getElementById("status").innerText = "Erro ao carregar relatório.";
   }
 }
 
