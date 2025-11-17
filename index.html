@@ -118,12 +118,23 @@
   <header>📊 Painel de Curricularização - Power BI</header>
 
   <main>
-    <div id="status" style="position:absolute; top:20px; left:20px; 
-         background:#fff; padding:10px 16px; border-radius:8px;
-         box-shadow:0 4px 12px rgba(0,0,0,0.15); font-size:14px; font-weight:600;
-         z-index:10;">
+      <div id="status" style="
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: #ffffff;
+        padding: 30px 40px;
+        border-radius: 16px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+        font-size: 1.3rem;
+        font-weight: 600;
+        text-align: center;
+        z-index: 50;
+    ">
       Aguarde, seu resultado fica pronto em breve...
     </div>
+
 
     <div id="reportContainer"></div>
     <button id="printButton" class="btn-imprimir" title="Imprimir relatório">🖨️</button>
@@ -144,10 +155,9 @@ async function verificarDados(report) {
     for (const v of visuals) {
       if (["table", "matrix", "card"].includes(v.type)) {
         try {
-          const exportado = await v.exportData(powerbi.models.ExportDataType.Summarized);
-
+          const exportado = await v.exportData(window['powerbi-client'].models.ExportDataType.Summarized);
           if (exportado && exportado.data && exportado.data.length > 0) {
-            return true; // TEM DADOS
+            return true;
           }
         } catch (e) {}
       }
@@ -165,26 +175,27 @@ async function embedReport() {
 
     const codigo = new URLSearchParams(window.location.search).get('codigo') || window.codigo;
 
+    const models = window["powerbi-client"].models;
+
     const embedConfiguration = {
       type: 'report',
       id: data.reportId,
       embedUrl: data.embedUrl,
       accessToken: data.embedToken,
-      tokenType: powerbi.models.TokenType.Embed,
+      tokenType: models.TokenType.Embed,  // ✔ CORRIGIDO
       settings: {
         panes: { filters: { visible: false }, pageNavigation: { visible: true } },
-        background: powerbi.models.BackgroundType.Transparent
+        background: models.BackgroundType.Transparent
       }
     };
 
     const reportContainer = document.getElementById('reportContainer');
-    const report = powerbi.embed(reportContainer, embedConfiguration);
+    const report = window.powerbi.embed(reportContainer, embedConfiguration);
 
     const statusEl = document.getElementById("status");
     statusEl.innerText = "Aguarde, seu resultado fica pronto em breve...";
 
     report.on("loaded", async () => {
-
       // Aplicar filtro
       if (codigo) {
         const filter = {
@@ -192,36 +203,38 @@ async function embedReport() {
           target: { table: "respostas", column: "Codigo" },
           operator: "In",
           values: [codigo],
-          filterType: powerbi.models.FilterType.BasicFilter
+          filterType: models.FilterType.BasicFilter
         };
 
-        await report.updateFilters(powerbi.models.FiltersOperations.Replace, [filter]);
+        await report.updateFilters(models.FiltersOperations.Replace, [filter]);
       }
 
-      // Verificar se os dados apareceram após renderização
+      // Verificação após renderização
       report.on("rendered", async () => {
-        const dadosOk = await verificarDados(report);
+        const temDados = await verificarDados(report);
 
-        if (dadosOk) {
-          statusEl.style.display = "none"; // Esconde mensagem quando tiver dados
+        if (temDados) {
+          statusEl.style.display = "none"; // ✔ OCULTA
         } else {
           statusEl.innerText = "Aguarde, seu resultado fica pronto em breve...";
         }
       });
     });
 
-    // Botão imprimir
-    const printButton = document.getElementById('printButton');
-    printButton.addEventListener('click', () => report.print());
+    // Imprimir
+    document.getElementById("printButton").addEventListener("click", () => report.print());
 
   } catch (err) {
     console.error("Erro ao embedar relatório:", err);
-    document.getElementById("status").innerText = "Erro ao carregar relatório.";
+
+    document.getElementById("status").innerText =
+      "Não foi possível carregar seu resultado. Tente novamente.";
   }
 }
 
 embedReport();
 </script>
+
 
 </body>
 </html>
