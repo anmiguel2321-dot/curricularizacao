@@ -157,8 +157,8 @@ async function verificarDados(report) {
         try {
           const exportado = await v.exportData(powerbi.models.ExportDataType.Summarized);
 
-          if (exportado && exportado.data && exportado.data.length > 0) {
-            return true; // TEM DADOS
+          if (exportado?.data?.length > 0) {
+            return true;
           }
         } catch (e) {}
       }
@@ -170,6 +170,9 @@ async function verificarDados(report) {
 }
 
 async function embedReport() {
+  const statusEl = document.getElementById("status");
+  statusEl.innerText = "Aguarde, seu resultado fica pronto em breve...";
+
   try {
     const res = await fetch('/api/embed-token');
     const data = await res.json();
@@ -188,11 +191,14 @@ async function embedReport() {
       }
     };
 
-    const reportContainer = document.getElementById('reportContainer');
-    const report = powerbi.embed(reportContainer, embedConfiguration);
+    const report = powerbi.embed(document.getElementById('reportContainer'), embedConfiguration);
 
-    const statusEl = document.getElementById("status");
-    statusEl.innerText = "Aguarde, seu resultado fica pronto em breve...";
+    // 🔥 Tratamento correto de erros DO POWER BI
+    report.on("error", function (event) {
+      console.warn("Power BI gerou erro:", event.detail);
+      statusEl.style.display = "block";
+      statusEl.innerText = "Aguarde, seu resultado fica pronto em breve...";
+    });
 
     report.on("loaded", async () => {
 
@@ -209,25 +215,24 @@ async function embedReport() {
         await report.updateFilters(powerbi.models.FiltersOperations.Replace, [filter]);
       }
 
-      // Verificar se os dados apareceram após renderização
+      // Após renderizar, verificar se tem dados
       report.on("rendered", async () => {
         const dadosOk = await verificarDados(report);
 
         if (dadosOk) {
-          statusEl.style.display = "none"; // Esconde mensagem quando tiver dados
+          statusEl.style.display = "none";
         } else {
           statusEl.innerText = "Aguarde, seu resultado fica pronto em breve...";
+          statusEl.style.display = "block";
         }
       });
     });
 
-    // Botão imprimir
-    const printButton = document.getElementById('printButton');
-    printButton.addEventListener('click', () => report.print());
+    document.getElementById('printButton').addEventListener('click', () => report.print());
 
   } catch (err) {
     console.error("Erro ao embedar relatório:", err);
-    document.getElementById("status").innerText = "Erro ao carregar relatório.";
+    statusEl.innerText = "Aguarde, seu resultado fica pronto em breve...";
   }
 }
 
