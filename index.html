@@ -1,242 +1,140 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Painel Power BI - Curricularização</title>
+<meta charset="UTF-8">
+<title>Resultado</title>
+<script src="https://cdn.jsdelivr.net/npm/powerbi-client@2.19.1/dist/powerbi.js"></script>
+<style>
+  body {
+    margin:0;
+    padding:0;
+    background:#f7f7f7;
+    font-family:Arial, sans-serif;
+  }
 
-  <style>
-    body {
-      font-family: "Segoe UI", Arial, sans-serif;
-      margin: 0;
-      background-color: #f5f7fa;
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-      color: #333;
-    }
+  #reportContainer {
+    width:100vw;
+    height:100vh;
+    position:relative;
+  }
 
-    header {
-      background: linear-gradient(90deg, #0057b8, #0073e6);
-      color: #fff;
-      text-align: center;
-      padding: 1rem 0.5rem;
-      font-size: 1.5rem;
-      font-weight: 600;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
-      letter-spacing: 0.5px;
-    }
-
-    main {
-      flex: 1;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 2rem;
-      position: relative;
-    }
-
-    #reportContainer {
-      width: 90%;
-      height: 80vh;
-      border-radius: 16px;
-      background-color: #fff;
-      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
-      overflow: hidden;
-      transition: transform 0.2s ease;
-    }
-
-    #reportContainer:hover {
-      transform: scale(1.002);
-    }
-
-    footer {
-      background-color: #f0f0f0;
-      text-align: center;
-      padding: 0.7rem;
-      font-size: 0.9rem;
-      color: #666;
-      box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.1);
-    }
-
-    /* Botão flutuante de imprimir */
-    .btn-imprimir {
-      position: absolute;
-      bottom: 2rem;
-      right: 2rem;
-      background: #0057b8;
-      color: white;
-      border: none;
-      border-radius: 50%;
-      width: 60px;
-      height: 60px;
-      font-size: 1.5rem;
-      cursor: pointer;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-      transition: background 0.2s ease, transform 0.2s ease;
-    }
-
-    .btn-imprimir:hover {
-      background: #0073e6;
-      transform: scale(1.1);
-    }
-
-    @media (max-width: 768px) {
-      #reportContainer {
-        width: 100%;
-        height: 70vh;
-      }
-
-      .btn-imprimir {
-        bottom: 1.2rem;
-        right: 1.2rem;
-        width: 50px;
-        height: 50px;
-        font-size: 1.3rem;
-      }
-    }
-
-    /* Estilo de impressão */
-    @media print {
-      body * {
-        visibility: hidden;
-      }
-      #reportContainer, #reportContainer * {
-        visibility: visible;
-      }
-      #reportContainer {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
-      }
-    }
-  </style>
+  #status {
+    display:none;
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform:translate(-50%, -50%);
+    background:#fff;
+    padding:25px 45px;
+    border-radius:15px;
+    box-shadow:0 6px 25px rgba(0,0,0,0.25);
+    font-size:1.3rem;
+    font-weight:600;
+    text-align:center;
+    z-index:50;
+  }
+</style>
 </head>
 
 <body>
-  <header>📊 Painel de Curricularização - Power BI</header>
 
-  <main>
-      <div id="status" style="
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: #ffffff;
-        padding: 30px 40px;
-        border-radius: 16px;
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
-        font-size: 1.3rem;
-        font-weight: 600;
-        text-align: center;
-        z-index: 50;
-    ">
-      Aguarde, seu resultado fica pronto em breve...
-    </div>
+<div id="reportContainer"></div>
+<div id="status">Aguarde, seu resultado fica pronto em breve...</div>
 
-
-    <div id="reportContainer"></div>
-    <button id="printButton" class="btn-imprimir" title="Imprimir relatório">🖨️</button>
-  </main>
-
-  <footer>
-    Desenvolvido com ❤️ usando Power BI Embedded
-  </footer>
-
-  <script src="https://cdn.jsdelivr.net/npm/powerbi-client/dist/powerbi.min.js"></script>
 <script>
-async function verificarDados(report) {
-  try {
-    const pages = await report.getPages();
-    const page = pages[0];
-    const visuals = await page.getVisuals();
+(async function() {
 
-    for (const v of visuals) {
-      if (["table", "matrix", "card"].includes(v.type)) {
-        try {
-          const exportado = await v.exportData(powerbi.models.ExportDataType.Summarized);
+  // Obter código da URL
+  const url = new URL(window.location.href);
+  const codigo = url.searchParams.get("codigo");
 
-          if (exportado?.data?.length > 0) {
-            return true;
-          }
-        } catch (e) {}
+  if (!codigo) {
+    document.getElementById("status").innerText = "Código não informado.";
+    document.getElementById("status").style.display = "block";
+    return;
+  }
+
+  // Config embed
+  const models = window['powerbi-client'].models;
+
+  const embedConfig = {
+    type: "report",
+    tokenType: models.TokenType.Embed,
+    accessToken: "SEU_TOKEN_AQUI",
+    embedUrl: `https://app.powerbi.com/reportEmbed?reportId=SEU_REPORT_ID&groupId=SEU_GROUP_ID`,
+    settings: {
+      panes: {
+        filters: { visible: false },
+        pageNavigation: { visible: false }
       }
     }
-  } catch (err) {
-    console.error("Erro ao verificar dados:", err);
-  }
-  return false;
-}
+  };
 
-async function embedReport() {
-  const statusEl = document.getElementById("status");
-  statusEl.innerText = "Aguarde, seu resultado fica pronto em breve...";
+  const reportContainer = document.getElementById("reportContainer");
+  const powerbi = new window.powerbi.service.Service(
+    window.powerbi.factories.hpmFactory,
+    window.powerbi.factories.wpmpFactory,
+    window.powerbi.factories.routerFactory
+  );
 
-  try {
-    const res = await fetch('/api/embed-token');
-    const data = await res.json();
+  // Embedar o relatório
+  const report = powerbi.embed(reportContainer, embedConfig);
 
-    const codigo = new URLSearchParams(window.location.search).get('codigo') || window.codigo;
+  // Quando o relatório estiver pronto, aplica o filtro
+  report.on("loaded", async () => {
 
-    const embedConfiguration = {
-      type: 'report',
-      id: data.reportId,
-      embedUrl: data.embedUrl,
-      accessToken: data.embedToken,
-      tokenType: powerbi.models.TokenType.Embed,
-      settings: {
-        panes: { filters: { visible: false }, pageNavigation: { visible: true } },
-        background: powerbi.models.BackgroundType.Transparent
-      }
+    const filter = {
+      $schema: "http://powerbi.com/product/schema#basic",
+      target: {
+        table: "NOME_DA_TABELA",
+        column: "NOME_DA_COLUNA"
+      },
+      operator: "In",
+      values: [codigo]
     };
 
-    const report = powerbi.embed(document.getElementById('reportContainer'), embedConfiguration);
+    await report.updateFilters(models.FiltersOperations.Replace, [filter]);
 
-    // 🔥 Tratamento correto de erros DO POWER BI
-    report.on("error", function (event) {
-      console.warn("Power BI gerou erro:", event.detail);
-      statusEl.style.display = "block";
-      statusEl.innerText = "Aguarde, seu resultado fica pronto em breve...";
-    });
+    // Aguarda renderizar tudo antes de verificar dados
+    setTimeout(async () => {
+      try {
+        const pages = await report.getPages();
+        const page = pages[0];
+        const visuals = await page.getVisuals();
 
-    report.on("loaded", async () => {
+        let temDados = false;
 
-      // Aplicar filtro
-      if (codigo) {
-        const filter = {
-          $schema: "http://powerbi.com/product/schema#basic",
-          target: { table: "respostas", column: "Codigo" },
-          operator: "In",
-          values: [codigo],
-          filterType: powerbi.models.FilterType.BasicFilter
-        };
+        for (const v of visuals) {
+          if (["table", "matrix", "card"].includes(v.type)) {
+            try {
+              const d = await v.exportData(models.ExportDataType.Summarized);
+              if (d?.data?.length > 0) {
+                temDados = true;
+                break;
+              }
+            } catch (e) {}
+          }
+        }
 
-        await report.updateFilters(powerbi.models.FiltersOperations.Replace, [filter]);
+        const statusDiv = document.getElementById("status");
+
+        if (!temDados) {
+          statusDiv.innerText = "Aguarde, seu resultado fica pronto em breve...";
+          statusDiv.style.display = "block";
+        } else {
+          statusDiv.style.display = "none";
+        }
+
+      } catch (err) {
+        document.getElementById("status").innerText =
+          "Não foi possível carregar seu resultado.";
+        document.getElementById("status").style.display = "block";
       }
 
-      // Após renderizar, verificar se tem dados
-      report.on("rendered", async () => {
-        const dadosOk = await verificarDados(report);
+    }, 1500);
+  });
 
-        if (dadosOk) {
-          statusEl.style.display = "none";
-        } else {
-          statusEl.innerText = "Aguarde, seu resultado fica pronto em breve...";
-          statusEl.style.display = "block";
-        }
-      });
-    });
-
-    document.getElementById('printButton').addEventListener('click', () => report.print());
-
-  } catch (err) {
-    console.error("Erro ao embedar relatório:", err);
-    statusEl.innerText = "Aguarde, seu resultado fica pronto em breve...";
-  }
-}
-
-embedReport();
+})();
 </script>
 
 </body>
