@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Painel Power BI - Curricularização</title>
-
   <style>
     body {
       font-family: "Segoe UI", Arial, sans-serif;
@@ -15,7 +14,6 @@
       min-height: 100vh;
       color: #333;
     }
-
     header {
       background: linear-gradient(90deg, #0057b8, #0073e6);
       color: #fff;
@@ -26,7 +24,6 @@
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
       letter-spacing: 0.5px;
     }
-
     main {
       flex: 1;
       display: flex;
@@ -35,7 +32,6 @@
       padding: 2rem;
       position: relative;
     }
-
     #reportContainer {
       width: 90%;
       height: 80vh;
@@ -44,23 +40,18 @@
       box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
       overflow: hidden;
     }
-
-
-    status {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: #ffffff;
-        padding: 30px 40px;
-        border-radius: 16px;
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
-        font-size: 1.3rem;
-        font-weight: 600;
-        text-align: center;
-        z-index: 50;
+    #status {
+      position: absolute;
+      top: 2rem;
+      font-size: 1.2rem;
+      background: #fff9c4;
+      padding: 10px 20px;
+      border-radius: 8px;
+      color: #665c00;
+      border: 1px solid #e6d267;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      display: none;
     }
-    
     footer {
       background-color: #f0f0f0;
       text-align: center;
@@ -69,7 +60,6 @@
       color: #666;
       box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.1);
     }
-
     .btn-imprimir {
       position: absolute;
       bottom: 2rem;
@@ -91,10 +81,9 @@
   <header>📊 Painel de Curricularização - Power BI</header>
 
   <main>
-    
     <div id="status">Aguarde, seu resultado fica pronto em breve...</div>
     <div id="reportContainer"></div>
-    <button id="printButton" class="btn-imprimir">🖨️</button>
+    <button id="printButton" class="btn-imprimir" title="Imprimir relatório">🖨️</button>
   </main>
 
   <footer>
@@ -110,51 +99,56 @@
         const data = await res.json();
 
         const codigo = new URLSearchParams(window.location.search).get('codigo');
-
         const models = window['powerbi-client'].models;
+
+        // Configurações do embed - escondendo painel de filtros
+        const embedConfig = {
+          type: 'report',
+          id: data.reportId,
+          embedUrl: data.embedUrl,
+          accessToken: data.embedToken,
+          tokenType: models.TokenType.Embed,
+          settings: {
+            panes: {
+              filters: { visible: false },
+              pageNavigation: { visible: true }
+            }
+          }
+        };
+
+        const reportContainer = document.getElementById("reportContainer");
+
+        // Usando o service embutido (como você já tinha)
         const powerbiService = new window['powerbi-client'].service.Service(
           window['powerbi-client'].factories.hpmFactory,
           window['powerbi-client'].factories.wpmpFactory,
           window['powerbi-client'].factories.routerFactory
         );
 
-        const embedConfig = {
-          type: 'report',
-          id: data.reportId,
-          embedUrl: data.embedUrl,
-          accessToken: data.embedToken,
-          
-          settings: {
-            panes: {
-              filters: {
-                visible: false // ← desativa painel de filtros
-              }
-            }
-          },
-        
-          tokenType: models.TokenType.Embed
-        };
-        
+        const report = powerbiService.embed(reportContainer, embedConfig);
+        const statusEl = document.getElementById("status");
+
+        // Ao carregar o relatório aplicamos o filtro (se houver código)
         report.on("loaded", async () => {
+          // mostramos status enquanto verificamos se há dados
           statusEl.style.display = "block";
-        
+
           if (codigo) {
-            const filtro = {
-              $schema: "http://powerbi.com/product/schema#basic",
-              target: { table: "respostas", column: "Codigo" },
-              operator: "In",
-              values: [codigo],
-              filterType: models.FilterType.BasicFilter
-            };
-        
-            // NÃO REMOVER FILTROS → ISSO QUEBRAVA O POWER BI
+            // use a classe BasicFilter para garantir filterType corretamente
+            const filtro = new models.BasicFilter(
+              { table: "respostas", column: "Codigo" },
+              "In",
+              [codigo]
+            );
+
+            // NÃO removemos filtros globais do relatório (removeFilters pode bagunçar)
             await report.updateFilters(models.FiltersOperations.Replace, [filtro]);
-        
+
             console.log("Filtro aplicado:", filtro);
           }
         });
 
-
+        // Após renderizar, verificamos em visuais exportáveis (table/matrix)
         report.on("rendered", async () => {
           try {
             const pages = await report.getPages();
@@ -163,42 +157,56 @@
             let encontrouDados = false;
 
             for (const v of visuals) {
+              // somente visuais que costumam permitir export de linhas
               if (!["table", "matrix"].includes(v.type)) continue;
 
               try {
                 const exp = await v.exportData(models.ExportDataType.Summarized);
 
-                if (exp?.data) {
-                  // CSV → separar linhas
+                if (exp && exp.data) {
                   const linhas = exp.data.trim().split("\n");
-
-                  // Se tiver mais de 1 linha, existe dado
-                  if (linhas.length > 1) {
+                  if (linhas.length > 1) { // mais que cabeçalho
                     encontrouDados = true;
                     break;
                   }
                 }
-              } catch {}
+              } catch (e) {
+                // ignore falha de exportação de um visual específico
+              }
             }
 
             if (encontrouDados) {
-              statusEl.style.display = "none"; // esconde
+              statusEl.style.display = "none";
             } else {
-              statusEl.style.display = "block"; 
+              statusEl.style.display = "block";
               statusEl.innerText = "Aguarde, seu resultado fica pronto em breve...";
             }
-
           } catch (err) {
+            console.error("Erro ao verificar dados:", err);
             statusEl.style.display = "block";
             statusEl.innerText = "Não foi possível carregar seu resultado.";
           }
         });
 
+        // Botão imprimir - tratamento seguro
+        document.getElementById("printButton").addEventListener("click", async () => {
+          try {
+            await report.print();
+          } catch (err) {
+            console.error("Erro ao imprimir:", err);
+            alert("Não foi possível enviar para impressão.");
+          }
+        });
+
       } catch (err) {
-        console.error(err);
+        console.error("Erro no embedReport:", err);
+        const statusEl = document.getElementById("status");
+        statusEl.style.display = "block";
+        statusEl.innerText = "Não foi possível carregar seu resultado.";
       }
     }
 
+    // Inicializa
     embedReport();
   </script>
 </body>
