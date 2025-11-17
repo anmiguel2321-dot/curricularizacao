@@ -155,16 +155,34 @@ async function verificarDados(report) {
     for (const v of visuals) {
       if (["table", "matrix", "card"].includes(v.type)) {
         try {
-          const exportado = await v.exportData(window['powerbi-client'].models.ExportDataType.Summarized);
-          if (exportado && exportado.data && exportado.data.length > 0) {
-            return true;
+          const exportado = await v.exportData(
+            window['powerbi-client'].models.ExportDataType.Summarized,
+            200
+          );
+
+          if (exportado && exportado.data) {
+
+            // Quebra CSV em linhas
+            const linhas = exportado.data
+              .split("\n")
+              .map(l => l.trim())
+              .filter(l => l !== "");
+
+            // Se tiver mais que 1 linha → há dados de verdade
+            if (linhas.length > 1) {
+              return true;
+            }
           }
-        } catch (e) {}
+
+        } catch (e) {
+          console.warn("Erro exportando dados de um visual:", e);
+        }
       }
     }
   } catch (err) {
     console.error("Erro ao verificar dados:", err);
   }
+
   return false;
 }
 
@@ -182,21 +200,25 @@ async function embedReport() {
       id: data.reportId,
       embedUrl: data.embedUrl,
       accessToken: data.embedToken,
-      tokenType: models.TokenType.Embed,  // ✔ CORRIGIDO
+      tokenType: models.TokenType.Embed,
       settings: {
-        panes: { filters: { visible: false }, pageNavigation: { visible: true } },
+        panes: {
+          filters: { visible: false },
+          pageNavigation: { visible: true }
+        },
         background: models.BackgroundType.Transparent
       }
     };
 
-    const reportContainer = document.getElementById('reportContainer');
-    const report = window.powerbi.embed(reportContainer, embedConfiguration);
+    const report = window.powerbi.embed(
+      document.getElementById('reportContainer'),
+      embedConfiguration
+    );
 
     const statusEl = document.getElementById("status");
     statusEl.innerText = "Aguarde, seu resultado fica pronto em breve...";
 
     report.on("loaded", async () => {
-      // Aplicar filtro
       if (codigo) {
         const filter = {
           $schema: "http://powerbi.com/product/schema#basic",
@@ -209,19 +231,17 @@ async function embedReport() {
         await report.updateFilters(models.FiltersOperations.Replace, [filter]);
       }
 
-      // Verificação após renderização
       report.on("rendered", async () => {
         const temDados = await verificarDados(report);
 
         if (temDados) {
-          statusEl.style.display = "none"; // ✔ OCULTA
+          statusEl.style.display = "none";
         } else {
           statusEl.innerText = "Aguarde, seu resultado fica pronto em breve...";
         }
       });
     });
 
-    // Imprimir
     document.getElementById("printButton").addEventListener("click", () => report.print());
 
   } catch (err) {
