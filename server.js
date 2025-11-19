@@ -33,18 +33,17 @@ module.exports = async (req, res) => {
   const email = query.get('email');     // captura ?email=...
   const id = query.get('id');           // captura ?id=...
 
-  // ✅ Serve index.html com parâmetros
+  // Serve a página principal
   if (pathOnly === '/' || pathOnly === '/index.html') {
     const filePath = path.join(__dirname, 'index.html');
     let html = fs.readFileSync(filePath, 'utf8');
 
-    // injeta os parâmetros no HTML
     html = html.replace(
       '</body>',
       `<script>
-        window.email = "${email || ''}";
-        window.id = "${id || ''}";
-      </script></body>`
+         window.email = "${email || ''}";
+         window.id = "${id || ''}";
+       </script></body>`
     );
 
     res.setHeader('Content-Type', 'text/html');
@@ -52,16 +51,17 @@ module.exports = async (req, res) => {
     return;
   }
 
+  // Serve a página ADMIN (HTML com iframe)
   if (pathOnly === '/admin') {
-  const filePath = path.join(__dirname, 'dashboard-admin.html');
-  let html = fs.readFileSync(filePath, 'utf8');
+    const filePath = path.join(__dirname, 'dashboard-admin.html');
+    let html = fs.readFileSync(filePath, 'utf8');
 
-  res.setHeader('Content-Type', 'text/html');
-  res.status(200).send(html);
-  return;
-}
+    res.setHeader('Content-Type', 'text/html');
+    res.status(200).send(html);
+    return;
+  }
 
-  // ✅ Endpoint para gerar embed token
+  // Endpoint para embed do relatório principal
   if (pathOnly.startsWith('/api/embed-token')) {
     try {
       const accessToken = await getAccessToken();
@@ -90,6 +90,6 @@ module.exports = async (req, res) => {
     return;
   }
 
-  // ❌ Rota não encontrada
+  // Rota inválida
   res.status(404).send('Rota não encontrada');
 };
