@@ -52,6 +52,15 @@ module.exports = async (req, res) => {
     return;
   }
 
+  if (pathOnly === '/admin') {
+  const filePath = path.join(__dirname, 'dashboard-admin.html');
+  let html = fs.readFileSync(filePath, 'utf8');
+
+  res.setHeader('Content-Type', 'text/html');
+  res.status(200).send(html);
+  return;
+}
+
   // ✅ Endpoint para gerar embed token
   if (pathOnly.startsWith('/api/embed-token')) {
     try {
